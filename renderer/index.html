@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
+  <title>千牛铺货助手 - 1688采集上淘</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ============ 顶栏 ============ -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo-mark">牛</span>
+        <span class="brand-name">千牛铺货助手</span>
+        <span class="brand-ver">v1.1.2</span>
+      </div>
+      <div class="shop-status">
+        <span id="top-shop-name" class="shop-chip">店铺: 未登录</span>
+        <span id="top-collect-acc" class="stat-chip">采集账号: 未登录</span>
+        <span id="top-today-stat" class="stat-chip">今日上架 0</span>
+      </div>
+      <div class="top-right">
+        <span id="queue-mini" class="stat-chip"></span>
+      </div>
+    </header>
+
+    <!-- 启动登录态过期横幅（默认隐藏，主进程检测到过期账号后显示） -->
+    <div id="login-expired-banner" style="display:none;background:#fef0f0;border-bottom:1px solid #e54d42;padding:6px 14px;font-size:12px;color:#a02822;align-items:center;gap:8px;flex-wrap:wrap">
+      <b>⚠ 账号登录态已过期</b>
+      <span id="expired-acc-list"></span>
+      <span style="flex:1"></span>
+      <button class="btn small" id="expired-goto-shop" style="display:none">重新登录店铺</button>
+      <button class="btn small" id="expired-goto-collect" style="display:none">重新登录采集号</button>
+      <button class="btn small" id="expired-dismiss">稍后再说</button>
+    </div>
+
+    <!-- ============ 主Tab（照抄黑鲸鱼 MainNewForm） ============ -->
+    <nav class="maintabs">
+      <button class="mtab active" data-tab="collect">采集宝贝</button>
+      <button class="mtab" data-tab="hotpick">热点选品</button>
+      <button class="mtab" data-tab="upset">上传设置</button>
+      <button class="mtab" data-tab="imgset">图片设置</button>
+      <button class="mtab" data-tab="upload">上传宝贝</button>
+      <button class="mtab" data-tab="records">上传记录</button>
+      <button class="mtab" data-tab="aiop">AI运营</button>
+      <button class="mtab" data-tab="suppl">供应商管理</button>
+    </nav>
+
+    <div class="tabbody">
+
+      <!-- Tab1: 采集宝贝 -->
+      <section class="tabpage show" id="tab-collect">
+<div class="toolbar-row">
+          <label class="tb-label">商品链接</label>
+          <textarea id="link-input" rows="3" class="mono tb-links" placeholder="https://detail.1688.com/offer/123456789.html&#10;（一行一个链接，最多100条）"></textarea>
+          <div class="tb-group">
+            <button class="btn" onclick="importLinksToTextarea()">导入链接</button>
+            <button class="btn primary" id="btn-link-collect" onclick="doLinkCollect()">开始采集</button>
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <label class="tb-label">关键词</label>
+          <input type="text" id="kw-input" class="tb-kw" placeholder="如：连衣裙 收纳凳" />
+          <div class="tb-group">
+            <label class="tb-label-sm">页数</label>
+            <input type="number" id="kw-pages" value="3" min="1" max="20" class="w-s1" />
+            <label class="tb-label-sm">价格</label>
+            <input type="number" id="kw-pricemin" placeholder="不限" class="w-s2" /> -
+            <input type="number" id="kw-pricemax" placeholder="不限" class="w-s2" />
+            <label class="tb-label-sm">货源</label>
+            <select id="cbb_Source" class="w-s5">
+              <option value="normal" selected>常规搜索</option>
+              <option value="daixiao">一键代发</option>
+              <option value="lowprice">低价货源</option>
+              <option value="premium">优质货源</option>
+            </select>
+          </div>
+          <div class="tb-group">
+            <button class="btn primary" id="btn-kw-collect" onclick="doKeywordCollect()">关键词选款</button>
+            <button class="btn" onclick="doFactoryCollect()">工厂店采集</button>
+          </div>
+        </div>
+        <!-- 全店采集（黑鲸鱼 Form全店采集 完整移植 v2.5） -->
+        <fieldset class="groupbox">
+          <legend>全店采集筛选</legend>
+        <div class="toolbar-row" style="position:relative">
+          <label class="tb-label">1688电脑端店铺首页链接</label>
+          <input type="text" id="shop-input" class="tb-kw w-s9" placeholder="https://xxx.1688.com（或输入供应商名称点搜索）" />
+          <button class="btn" id="btn-shop-cate" onclick="doShopLoadCate()">获取店铺分类&gt;&gt;</button>
+          <button class="btn" onclick="searchCompanyBtnClick(this)">搜索店铺</button>
+          <div id="shop-cate-tree-wrap" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:#fff;border:1px solid var(--line-dark);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,.12);max-height:300px;overflow:auto;padding:8px 10px" class="w-s10">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px">
+              <b style="font-size:12px">店铺分类（勾选后按分类采集，不勾=全部）</b>
+              <span style="display:flex;gap:4px">
+                <button class="btn small" onclick="shopCateCheckAll(true)">全选</button>
+                <button class="btn small" onclick="shopCateCheckAll(false)">清空</button>
+                <button class="btn small" onclick="toggleShopCateTree()">收起</button>
+              </span>
+            </div>
+            <div id="shop-cate-tree"></div>
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <div class="tb-group">
+            <label class="inline-check"><input type="checkbox" id="shop-fenxiao" /> 一件代发</label>
+            <label class="tb-label-sm">起定量</label>
+            <input type="number" id="shop-quantitybegin" placeholder="不限" class="w-s2" />
+          </div>
+          <div class="tb-group">
+            <label class="tb-label-sm">排序</label>
+            <select id="cbb_shopsort" class="w-s5">
+              <option value="wangpu_score">默认排序</option>
+              <option value="tradenumdown">销量</option>
+              <option value="priceup">价格从低到高</option>
+              <option value="pricedown">价格从高到低</option>
+              <option value="timedown">时间从高到低</option>
+              <option value="timeup">时间从低到高</option>
+            </select>
+          </div>
+          <div class="tb-group">
+            <label class="tb-label-sm">价格</label>
+            <input type="number" id="shop-pricemin" placeholder="不限" class="w-s2" /> -
+            <input type="number" id="shop-pricemax" placeholder="不限" class="w-s2" />
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <div class="tb-group">
+            <label class="tb-label-sm">销量</label>
+            <input type="number" id="shop-xl1" placeholder="不限" class="w-s1" /> -
+            <input type="number" id="shop-xl2" placeholder="不限" class="w-s1" />
+          </div>
+          <div class="tb-group">
+            <label class="tb-label-sm">90天销量</label>
+            <input type="number" id="shop-xl90a" placeholder="不限" class="w-s1" /> -
+            <input type="number" id="shop-xl90b" placeholder="不限" class="w-s1" />
+          </div>
+          <div class="tb-group">
+            <label class="tb-label-sm">库存&gt;</label>
+            <input type="number" id="shop-bookcount" placeholder="不限" class="w-s2" />
+            <label class="tb-label-sm">起批量&lt;=</label>
+            <input type="number" id="shop-qpl" placeholder="不限" class="w-s2" />
+          </div>
+          <div class="tb-group">
+            <label class="tb-label-sm">月代发销量</label>
+            <input type="number" id="shop-ydxl1" placeholder="不限" class="w-s1" disabled /> -
+            <input type="number" id="shop-ydxl2" placeholder="不限" class="w-s1" disabled />
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <div class="tb-group">
+            <label class="tb-label-sm">采集前</label>
+            <input type="number" id="shop-maxcount" value="10000" class="w-s3" />
+            <label class="tb-label-sm">个宝贝</label>
+          </div>
+          <div class="tb-group">
+            <label class="inline-check"><input type="checkbox" id="shop-huohao" /> 查询货号</label>
+            <label class="inline-check"><input type="checkbox" id="shop-sku" /> 采集商品sku</label>
+            <label class="inline-check"><input type="checkbox" id="shop-shipinfo" /> 查询发货信息</label>
+            <label class="inline-check"><input type="checkbox" id="shop-rate" /> 查询好评率</label>
+            <label class="inline-check"><input type="checkbox" id="shop-sycm" onchange="syncSycmInputs()" /> 代发参谋数据</label>
+          </div>
+          <div class="tb-group">
+            <label class="inline-check"><input type="checkbox" id="shop-filter-zdy" /> 标题关键词过滤</label>
+            <label class="inline-check"><input type="checkbox" id="shop-filter-exported" /> 过滤已导出过的链接</label>
+            <label class="inline-check"><input type="checkbox" id="shop-showpic" checked /> 列表显示主图</label>
+            <a href="javascript:void(0)" class="link" onclick="openFilterWords()">设置</a>
+          </div>
+        </div>
+        </fieldset>
+        <div class="toolbar-row">
+          <button class="btn primary" id="btn-shop-collect" onclick="doShopCollect()">开始采集</button>
+          <button class="btn" onclick="openCollectAccountManager()">采集账号管理</button>
+          <button class="btn" onclick="exportShopTable()">导出到表格</button>
+          <button class="btn" onclick="exportShopLinks()">导出链接.txt</button>
+          <button class="btn" onclick="clearSearchCache(this)">清空缓存文件</button>
+          <span class="tip-line">建议列表总显示商品数不超过10000，如果要采集更多宝贝，建议分批采集</span>
+        </div>
+        <div class="toolbar-row">
+          <span class="tb-label">待上传宝贝数 <b id="lab_leftItem1">0</b></span>
+          <span class="flex-spacer"></span>
+          <label class="inline-check"><input type="checkbox" id="link-dlimg" checked /> 下载图片（上架需要，勿关）</label>
+          <button class="btn" onclick="btnImportDataClick()">导入商品数据包</button>
+          <button class="btn primary" onclick="addCheckedToUpload('link', this)">添加到上传列表</button>
+          <button class="btn" onclick="btnReplaceTitleClick()">批量替换标题</button>
+          <button class="btn go" onclick="go('upload')">下一步：上传&gt;&gt;</button>
+        </div>
+        <div class="split-2col">
+          <div class="panel goods-panel">
+            <div class="panel-head">
+              <h3>采集结果 <span id="link-count" class="count-badge"></span></h3>
+              <span class="spacer"></span>
+              <button class="btn small" onclick="checkAll('link', true)">全选</button>
+              <button class="btn small" onclick="checkAll('link', false)">全不选</button>
+              <button class="btn small" onclick="mButton7Click()">清理缓存</button>
+            </div>
+            <div id="goods-table-link" class="goods-grid"></div>
+          </div>
+          <div class="panel log-panel">
+            <div class="panel-head"><h3>采集记录</h3><span class="spacer"></span><button class="btn small" onclick="openLogsTab()">打开日志</button></div>
+            <div id="listbox_marklog" class="log-box"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: 热点选品 -->
+      <section class="tabpage" id="tab-hotpick">
+        <div class="panel">
+          <div class="panel-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <h3>热点选品</h3>
+            <span style="color:var(--sub);font-size:11px">输入分类关键词 → 1688货源合并搜索（一件代发+1件起批/常规）按销量排序 → 评分取Top N → 勾选后采集上传</span>
+            <span style="flex:1"></span>
+          </div>
+          <div class="toolbar-row" style="flex-wrap:wrap;gap:8px">
+            <label class="tb-label">分类关键词</label>
+            <input type="text" id="hp-kw" class="mono" style="flex:1;min-width:180px" placeholder="如：防晒衣、儿童书包、瑜伽裤" />
+            <label class="tb-label-sm">搜索页数</label>
+            <input type="number" id="hp-pages" class="w-s1" value="3" min="1" max="10" />
+            <label class="tb-label-sm">取Top N</label>
+            <input type="number" id="hp-topn" class="w-s1" value="30" min="1" max="200" />
+            <button class="btn primary" id="btn-hp-search" onclick="doHotPickSearch()">搜索选品</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);margin-bottom:0">
+            <span id="hp-count" style="color:var(--sub);font-size:11px">等待搜索…</span>
+            <span style="flex:1"></span>
+            <button class="btn small" onclick="hpCheckAll(true)">全选</button>
+            <button class="btn small" onclick="hpCheckAll(false)">取消全选</button>
+            <button class="btn primary small" id="btn-hp-collect" onclick="doHotPickCollect()">加入上传列表</button>
+          </div>
+          <div id="hp-list" class="hp-list">
+            <div class="empty-hint">输入关键词点击「搜索选品」，系统将按1688月销量排序并评分推荐热门商品</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab2: 上传设置 -->
+      <section class="tabpage" id="tab-upset">
+        <!-- AI智能推荐区域 -->
+        <div class="ai-rec-bar">
+          <div class="ai-rec-left">
+            <span class="ai-rec-title">AI智能推荐填写</span>
+            <label class="inline-check"><input type="checkbox" id="chkAiRecommend" /> 开启AI推荐</label>
+            <span id="ai-rec-reason" class="ai-rec-reason" style="display:none"></span>
+          </div>
+          <button class="btn primary" id="btn-ai-recommend" onclick="doAiRecommendSettings()">AI一键推荐设置</button>
+        </div>
+        <div class="upset-grid">
+          <div class="upset-line">
+            <div class="u-left">
+              <label class="inline-check"><input type="checkbox" id="cb_PriceDeal" /> 价格处理</label>
+              <select id="cbb_PriceSource"><option value="0">源价</option><option value="1">最低SKU价</option></select>
+              <input type="number" id="txt_AddNum" step="0.01" class="w-s2" /> 元
+              <label class="tb-label-sm">倍率</label>
+              <input type="number" id="txt_Multiplier1" value="1" step="0.01" class="w-s1" />
+            </div>
+            <div class="u-right">
+              <label class="inline-check"><input type="checkbox" id="chkMinPrice" /> 最低价SKU</label>
+              <select id="cmbMinPriceSku"><option value="0">加价</option><option value="1">加百分比</option><option value="2">乘</option></select>
+              <input type="number" id="txt_AddNumMin" step="0.01" placeholder="加" class="w-s1" />
+              <label class="inline-check"><input type="checkbox" id="chkNoLastDisc" /> 不使用营销渠道</label>
+            </div>
+          </div>
+          <div class="upset-line">
+            <div class="u-left">
+              <label class="inline-check"><input type="checkbox" id="chkPriceToOne" /> 价格超限自动修改SKU价格（减价/减百分比，请填写负数）</label>
+            </div>
+            <div class="u-right">
+              <label class="tb-label-sm">库存计数</label>
+              <select id="cmbStock" class="w-s4"><option value="1">拍下减库存</option><option value="0">付款减库存</option></select>
+              <label class="tb-label-sm">条形码</label>
+              <input type="text" id="txtBarCode" class="w-s4" />
+              <span class="inline-group">
+                <label class="inline-check"><input type="checkbox" id="chkMultiDiscount" onchange="syncMultiDiscount()" /> 多件优惠</label>
+                <select id="cmbMultiDiscount" class="w-s2">
+                  <option value="9" selected>9折</option><option value="9.1">9.1折</option><option value="9.2">9.2折</option><option value="9.3">9.3折</option>
+                  <option value="9.4">9.4折</option><option value="9.5">9.5折</option><option value="9.6">9.6折</option><option value="9.7">9.7折</option>
+                  <option value="9.8">9.8折</option><option value="9.9">9.9折</option>
+                </select>
+              </span>
+            </div>
+          </div>
+          <div class="upset-line">
+            <div class="u-left">
+              <label class="inline-check"><input type="checkbox" id="cb_Title" /> 标题自动重组</label>
+              <label class="inline-check"><input type="checkbox" id="cbk_filter_title" /> 自动过滤重复标题(本地)</label>
+              <label class="inline-check"><input type="checkbox" id="cb_LocalDiyFilter" checked /> 启用自定义过滤</label>
+              <a href="javascript:void(0)" class="link" onclick="clearTitleCache(this)">清空历史缓存标题</a>
+            </div>
+            <div class="u-right">
+              <label class="tb-label-sm">统一设置库存</label>
+              <input type="number" id="txtkucun" value="99" class="w-s1" />
+              <label class="tb-label-sm">最低价sku增库存</label>
+              <input type="number" id="txtminskukc" value="0" class="w-s1" />
+              <label class="inline-check"><input type="checkbox" id="chkRaiseService" /> 鉴别服务</label>
+            </div>
+          </div>
+          <div class="upset-line">
+            <div class="u-left">
+              <label class="inline-check"><input type="checkbox" id="cb_BrandIsOther" /> 品牌改为other/其他</label>
+              <label class="tb-label-sm">品牌修改为</label>
+              <input type="text" id="txtBrand" placeholder="品牌名" class="w-s4" />
+              <label class="tb-label-sm">导购标题</label>
+              <select id="cbb_DgTitle" class="w-s5" onchange="syncDgTitleInput()">
+                <option value="0">不设置导购标题</option>
+                <option value="1">标题生成导购标题</option>
+                <option value="2">自定义导购标题</option>
+              </select>
+              <input type="text" id="txt_DgTitle" class="w-s5" placeholder="20~30字" disabled />
+              <label class="inline-check"><input type="checkbox" id="cb_BrandIsNoBrand" /> 品牌改为无品牌/无注册商标</label>
+            </div>
+            <div class="u-right">
+              <label class="inline-check"><input type="checkbox" id="chkSizeTable" /> 生成尺码表</label>
+              <label class="inline-check"><input type="checkbox" id="chkSizeTableTj" /> 生成推荐尺码表</label>
+              <label class="tb-label-sm">是否二手</label>
+              <select id="cmbTwoItem" class="w-s2"><option value="0">否</option><option value="1">是</option></select>
+              <label class="inline-check"><input type="checkbox" id="chkBackR" /> 退换货承诺</label>
+            </div>
+          </div>
+          <div class="upset-line">
+            <div class="u-left">
+              <label class="inline-check"><input type="checkbox" id="cb_UploadToClassfy" /> 上传到分类</label>
+              <select id="cbb_UploadToClassfy" class="w-s5"></select>
+              <a href="javascript:void(0)" class="link" onclick="linkShopCategoryClick()">刷新分类</a>
+              <label class="inline-check"><input type="checkbox" id="mCheckBox1" /> 自动生成日期分类</label>
+              <label class="inline-check"><input type="checkbox" id="chkTranslateTitle" /> 标题翻译成英文</label>
+            </div>
+            <div class="u-right">
+              <label class="inline-check"><input type="checkbox" id="chkRadHh" /> 随机生成货号</label>
+              <label class="inline-check"><input type="checkbox" id="chkFilterNoFreePost" /> 过滤不包邮商品</label>
+              <label class="tb-label-sm">是否定制</label>
+              <select id="cmbCustomItem" class="w-s3"><option value="0">否</option><option value="1">图片传输</option><option value="2">文字</option></select>
+              <label class="inline-check"><input type="checkbox" id="chk7DayBack" checked /> 七天退货服务</label>
+            </div>
+          </div>
+          <div class="upset-line">
+            <div class="u-left">
+              <label class="tb-label-sm">上传方式</label>
+              <select id="cbb_UploadWay" class="w-s5"><option value="0">立即上架</option><option value="1">定时上架</option><option value="2" selected>放入仓库</option></select>
+              <label class="tb-label-sm">定时上架时间</label>
+              <input type="datetime-local" id="dtp_PutawayTime" class="w-s7" />
+              <label class="tb-label-sm">间隔</label>
+              <input type="number" id="txt_UpawayInterval" value="30" class="w-s1" /> 秒
+            </div>
+            <div class="u-right">
+              <label class="tb-label-sm">间隔</label>
+              <input type="number" id="txtJgMinute" value="0" class="w-s1" /> 分钟
+              <label class="tb-label-sm">商家编码</label>
+              <select id="cbb_MerchantCode" class="w-s8">
+                <option value="offerId">上家宝贝ID做商家编码</option>
+                <option value="none">不添加商家编码</option>
+              </select>
+              <label class="inline-check"><input type="checkbox" id="chkDownItem" /> 过滤已下架商品</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 子Tab -->
+        <nav class="subtabs">
+          <button class="stab active" data-sub="title">标题处理</button>
+          <button class="stab" data-sub="shopfilter">过滤店铺名</button>
+          <button class="stab" data-sub="brandfilter">品牌过滤词</button>
+          <button class="stab" data-sub="imgfilter">过滤图片地址</button>
+          <button class="stab" data-sub="category">自定义上传类目</button>
+          <button class="stab" data-sub="props">自定义宝贝属性</button>
+          <button class="stab" data-sub="postage">运费模板设置</button>
+          <button class="stab" data-sub="skuset">sku设置</button>
+          <button class="stab" data-sub="skuconv">sku转换</button>
+        </nav>
+
+        <div class="subbody">
+          <div class="subpage show" id="sub-title">
+            <div class="title-cols">
+              <div class="title-col">
+                <div class="tc-name">标题过滤词</div>
+                <textarea id="txtTitleFilter" rows="9" class="mono" placeholder="一行一个"></textarea>
+                <div class="tc-ops">
+                  <button class="btn small" onclick="btnTitleImportClick()">导入标题过滤词</button>
+                  <a href="javascript:void(0)" class="link" onclick="clearTextarea('txtTitleFilter')">清空</a>
+                </div>
+              </div>
+              <div class="title-col">
+                <div class="tc-name">标题清除词</div>
+                <textarea id="txtTitleClear" rows="9" class="mono" placeholder="一行一个"></textarea>
+                <div class="tc-ops">
+                  <button class="btn small" onclick="btnTitleClearImportClick()">导入标题清理词</button>
+                  <a href="javascript:void(0)" class="link" onclick="clearTextarea('txtTitleClear')">清空</a>
+                </div>
+              </div>
+              <div class="title-col title-stack">
+                <div class="tc-block">
+                  <div class="tc-name">标题关键词替换(2020=2021)</div>
+                  <textarea id="txtTitleReplaceKeyword" rows="3" class="mono" placeholder="2020=2021"></textarea>
+                </div>
+                <div class="tc-block">
+                  <div class="tc-name">详情清除词</div>
+                  <textarea id="txtDescClearWord" rows="3" class="mono"></textarea>
+                </div>
+              </div>
+              <div class="title-col title-stack">
+                <div class="tc-block">
+                  <div class="tc-name">标题前缀(多个就随机)</div>
+                  <textarea id="txtTitlePreKeyword" rows="3" class="mono"></textarea>
+                </div>
+                <div class="tc-block">
+                  <div class="tc-name">标题后缀(多个就随机)</div>
+                  <textarea id="txtTitleSuffixKeyword" rows="3" class="mono"></textarea>
+                </div>
+              </div>
+              <div class="title-col">
+                <div class="tc-name">自定义标题(宝贝ID=新标题,标题=新标题)</div>
+                <textarea id="txtCustomTitle" rows="9" class="mono" placeholder="88888888=宝贝新标题"></textarea>
+                <div class="tc-ops">
+                  <button class="btn small" onclick="btnCustomTitleImportClick()">导入自定义标题</button>
+                  <a href="javascript:void(0)" class="link" onclick="clearTextarea('txtCustomTitle')">清空</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="subpage" id="sub-shopfilter">
+            <label class="span2">过滤店铺名（一行一个，不上传包含词的宝贝） <textarea id="txt_IgnoreUid" rows="8" class="mono"></textarea></label>
+          </div>
+          <div class="subpage" id="sub-brandfilter">
+            <label class="span2">品牌过滤词（一行一个） <textarea id="txt_IgnoreBrand" rows="8" class="mono"></textarea></label>
+          </div>
+          <div class="subpage" id="sub-imgfilter">
+            <label class="span2">输入图片地址，一行一个（包含此地址的图片不上传） <textarea id="txt_filter_img" rows="8" class="mono"></textarea></label>
+          </div>
+          <div class="subpage" id="sub-category">
+            <div class="radio-row">
+              <label><input type="radio" name="categroy" id="rab_categroy_default" checked /> 默认为复制原宝贝类目</label>
+              <label><input type="radio" name="categroy" id="rab_categroy_self" /> 自定义统一上传类目</label>
+            </div>
+            <div class="form-grid-dense">
+              <label>关键词找类目 <input type="text" id="txt_category_key" placeholder="如：连衣裙" /></label>
+              <button class="btn" onclick="btnFindCategoryClick()">查询类目</button>
+              <label>选择上传类目 <select id="cbb_cagegorylist" class="w-s8"></select></label>
+            </div>
+            <p class="tip-line">上传类目配置：默认跟随1688原宝贝类目自动匹配淘宝类目</p>
+          </div>
+          <div class="subpage" id="sub-props">
+            <div class="form-grid-dense">
+              <label class="span2">输入宝贝属性（一行一个，例：型号=001） <textarea id="txtProps" rows="4" class="mono" placeholder="型号=001"></textarea></label>
+              <label class="span2">属性转换（例:书号=型号） <textarea id="txtPropsChange" rows="3" class="mono" placeholder="书号=型号"></textarea></label>
+              <label class="span2">缺少属性（只添加上家宝贝没有的属性） <textarea id="txtPropsLack" rows="3" class="mono"></textarea></label>
+              <label class="span2">属性替换词 <textarea id="txtPropsReplaceKey" rows="2" class="mono"></textarea></label>
+              <label class="span2">属性过滤词（不会上传包含过滤词的宝贝） <textarea id="txtPropsFilterKey" rows="2" class="mono"></textarea></label>
+              <label class="span2">属性清除词 <textarea id="txtPropsClearKey" rows="2" class="mono"></textarea></label>
+            </div>
+          </div>
+          <div class="subpage" id="sub-postage">
+            <div class="radio-row">
+              <label><input type="radio" name="transmode" id="chk_copy_TransMode1" checked /> 使用现有运费模板</label>
+              <label><input type="radio" name="transmode" id="chk_copy_TransMode2" /> 自动复制上家运费模板(命名：软件复制_上家宝贝ID)</label>
+              <label><input type="radio" name="transmode" id="chk_copy_TransMode3" /> 自定义运费模板</label>
+            </div>
+            <div class="form-grid-dense">
+              <label>运费模板 <select id="cbb_TransMode" class="w-s8"></select></label>
+              <button class="btn small" onclick="btnRefreshFeePostClick()">加载全部模板</button>
+              <a href="javascript:void(0)" class="link" onclick="clearPostTemplate()">清理未引用运费模板</a>
+              <label>发货时效
+                <select id="cmbDeliveryTime"><option value="">默认</option><option value="1">24小时(部分类目不允许)</option><option value="2">48小时(部分类目不允许)</option><option value="3" selected>72小时</option></select>
+              </label>
+              <label>重量 <input type="number" id="txtPostWeight" value="0" step="0.01" class="w-s2" title="仅按重量计费的运费模板生效；0=不设置重量" /> kg</label>
+              <label>代购发货地 <input type="text" id="cmbDgSendCity" placeholder="如：韩国" class="w-s4" /></label>
+              <label>代购采购地 <input type="text" id="cmbDgSendCountry" placeholder="如：中国" class="w-s4" /></label>
+              <label class="inline-check"><input type="checkbox" id="chkSdShop" onchange="loadShopStores()" /> 适用商户</label>
+              <label>门店 <select id="selStore" class="w-s6" disabled><option value="">勾选后加载门店</option></select></label>
+              <label>定时启动上传 <input type="text" id="txtAutoStartTime" placeholder="如 09:30（留空关闭）" class="w-s5" /></label>
+            </div>
+            <p class="tip-line">(采用复制上家运费模板影响上传速度，会出验证码)</p>
+          </div>
+          <div class="subpage" id="sub-skuset">
+            <fieldset class="groupbox"><legend>SKU过滤</legend>
+              <div class="form-grid-dense">
+                <label class="inline-check"><input type="checkbox" id="chkFilterSkuPriceGt" /> 过滤价格大于 <input type="number" id="txtFilterSkuPriceMax" step="0.01" class="w-s2" /> 元的SKU</label>
+                <label class="inline-check"><input type="checkbox" id="chkFilterSkuPriceLt" /> 过滤价格小于 <input type="number" id="txtFilterSkuPriceMin" step="0.01" class="w-s2" /> 元的SKU</label>
+                <label class="inline-check"><input type="checkbox" id="chkFilterNoStockSku" /> 过滤0库存的SKU</label>
+                <label class="inline-check"><input type="checkbox" id="chkFilterNoImgSku" /> 过滤没有图片的SKU</label>
+                <label class="span2">过滤包含以下关键词的SKU（一行一个） <textarea id="txtFilterSkuWord" rows="3" class="mono"></textarea></label>
+                <label>SKU数上限 <input type="number" id="txtSkuNum" value="0" class="w-s2" /></label>
+                <label class="inline-check"><input type="checkbox" id="cmbCustomSku" /> 超过自定义SKU个数的SKU不上传</label>
+              </div>
+            </fieldset>
+            <fieldset class="groupbox"><legend>缺失SKU设置</legend>
+              <div class="form-grid-dense">
+                <label class="inline-check"><input type="checkbox" id="chkAddNoSku" /> 自动补齐缺少的SKU</label>
+                <label class="inline-check"><input type="checkbox" id="chkAddNoSku1" /> 原宝贝无SKU自动加SKU</label>
+                <label class="inline-check"><input type="checkbox" id="chkCustomSkuMode" /> 使用自定义规格模式</label>
+                <label class="inline-check"><input type="checkbox" id="cmbSkuParam" /> 添加SKU参数</label>
+                <label class="span2">缺少的SKU设置（格式：颜色=黑色，一行一个） <textarea id="txtAddSku" rows="3" class="mono"></textarea></label>
+                <label>SKU替换词（格式：a=b） <input type="text" id="txtSkuReplaceWord" class="mono" /></label>
+                <label>SKU随机字符 <input type="text" id="txtSkuRandomWord" class="mono" /></label>
+                <button class="btn small" onclick="btnAddSkuClick()">添加SKU</button>
+              </div>
+            </fieldset>
+          </div>
+          <div class="subpage" id="sub-skuconv">
+            <div class="form-grid-dense">
+              <label class="span2">SKU转换（例如：规格=尺寸，一行一个）将阿里巴巴宝贝的规格SKU匹配到淘宝尺寸SKU <textarea id="txt_1688sku" rows="4" class="mono" placeholder="规格=尺寸"></textarea></label>
+              <label class="span2">SKU合并（格式：规格=尺码+款式） <textarea id="txtSkuMerge" rows="3" class="mono"></textarea></label>
+              <label>价格小数位处理
+                <select id="cbb_DecimalMode1"><option value="0">四舍五入到元</option><option value="1">四舍五入到十位</option><option value="2">保留1位</option><option value="3">保留2位</option><option value="4">取整加0.8</option><option value="5">向上取整</option></select>
+              </label>
+              <label>价格方式
+                <select id="cbb_Ysf1"><option value="0">倍率加价组合</option><option value="1">仅加固定金额</option><option value="2">仅乘倍率</option><option value="3">指定统一价格</option></select>
+              </label>
+              <button class="btn small" onclick="btn1688SettingClick()">其他配置</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row footbar">
+          <span class="tip-line">上传中不能修改配置</span>
+          <span class="flex-spacer"></span>
+          <button class="btn primary" onclick="saveUploadConfig()">保存配置</button>
+          <button class="btn" onclick="go('collect')">上一步采集</button>
+          <button class="btn go" onclick="go('upload')">下一步上传</button>
+        </div>
+      </section>
+
+      <!-- Tab3: 图片设置 -->
+      <section class="tabpage" id="tab-imgset">
+        <fieldset class="groupbox"><legend>主图/SKU</legend>
+          <div class="form-grid-dense">
+            <label>主图来源
+              <select id="cmbMainImg"><option value="0">上家主图</option><option value="1">上家主图+详情首图</option><option value="2">上家详情图</option><option value="3">SKU图</option></select>
+            </label>
+            <label>方主图尺寸:
+              <select id="cmbSqImg"><option value="800*800">800*800</option><option value="700*700">700*700</option></select>
+            </label>
+            <label class="inline-check"><input type="checkbox" id="chkVerImg" checked /> 生成长图</label>
+            <label class="inline-check"><input type="checkbox" id="chkUploadVideo" checked /> 上传主图视频</label>
+            <label class="inline-check"><input type="checkbox" id="cb_UploadSkuImg" checked /> 上传SKU图片</label>
+            <label class="inline-check"><input type="checkbox" id="cb_SkuImgDeal" /> SKU图翻转</label>
+            <label class="inline-check"><input type="checkbox" id="chkSkuSq800" checked /> SKU图改成800*800</label>
+            <label class="inline-check"><input type="checkbox" id="cb_ItemCopyAutoDeal" /> 主图翻转</label>
+            <label class="inline-check"><input type="checkbox" id="cb_ItemCopyAutoDealDesc" /> 详情图翻转</label>
+            <label class="inline-check"><input type="checkbox" id="chkRadImg" /> 打乱主图顺序</label>
+            <label class="inline-check"><input type="checkbox" id="chkBqQsImg" checked /> 上家无方图自动补齐方图</label>
+            <label>有保护主图
+              <select id="cmbProtectImg"><option value="0">直接使用</option><option value="1">自动处理</option></select>
+            </label>
+            <button class="btn small" onclick="btnMainImgClick()">主图处理</button>
+          </div>
+        </fieldset>
+        <fieldset class="groupbox"><legend>详情</legend>
+          <div class="form-grid-dense">
+            <label class="inline-check"><input type="checkbox" id="chkNoPcDesc" /> 不上传PC详情</label>
+            <label class="inline-check"><input type="checkbox" id="chkUseWlDesc" checked /> 使用无线端详情</label>
+            <label class="inline-check"><input type="checkbox" id="chkNoWlDesc" /> 不上传无线详情</label>
+            <label class="inline-check"><input type="checkbox" id="chkCustomDesc" /> 仅使用自定义详情(不使用上家详情)</label>
+            <label class="inline-check"><input type="checkbox" id="cb_AddTopButtomToDetail" /> 详情添加个人自定义详情首尾</label>
+            <label class="inline-check"><input type="checkbox" id="chkRemoveA" /> 移除详情页的链接及内容</label>
+            <label class="inline-check"><input type="checkbox" id="cb_OnlyItemCopy" /> 详情去掉文字只要图片</label>
+            <label>详情图保留 <input type="number" id="txt_DetailItemCopyNum" value="100" class="w-s2" /> 张</label>
+            <label>详情图移除前 <input type="number" id="txtRemoveDescImgA" value="0" class="w-s1" /> 张,移除后 <input type="number" id="txtRemoveDescImgB" value="0" class="w-s1" /> 张</label>
+            <label class="inline-check"><input type="checkbox" id="cbk_mainadddesc" /> 主图追加到详情页</label>
+            <label class="inline-check"><input type="checkbox" id="chkMegerImage" /> 拼接详情页</label>
+            <label class="inline-check"><input type="checkbox" id="cmbDescImgSplit" /> 详情图切片</label>
+            <label>详情页版本
+              <select id="cmbDescVer"><option value="0">旧版</option><option value="1">新版</option></select>
+            </label>
+            <label>隐藏链接
+              <select id="cbb_HideLink"><option value="0">不隐藏</option><option value="1">隐藏</option></select>
+            </label>
+            <label>自定义详情页首 <input type="text" id="txt_DiyDetailHead" placeholder="图片URL" class="mono" /></label>
+            <label>自定义详情页尾 <input type="text" id="txt_DiyDetailButtom" placeholder="图片URL" class="mono" /></label>
+          </div>
+        </fieldset>
+        <fieldset class="groupbox"><legend>其他</legend>
+          <div class="form-grid-dense">
+            <label>图片空间文件夹名 <input type="text" id="txtPicDirName" value="铺货助手" class="w-s4" /></label>
+            <label class="inline-check"><input type="checkbox" id="chkIsCompress" /> 是否压缩图片
+              <select id="cmbCompress"><option value="80">80%</option><option value="90">90%</option><option value="95">95%</option></select>
+            </label>
+            <label>水印
+              <select id="cmbWaterRemark"><option value="0">不加</option><option value="1">文字水印</option></select>
+            </label>
+            <button class="btn small" onclick="btnWaterClick()">设置水印内容</button>
+            <label class="inline-check"><input type="checkbox" id="chkAuditPic" /> 成人类目图片</label>
+            <label>能效标识图 <input type="text" id="txtNxImg" placeholder="图片URL" class="mono w-s6" /></label>
+            <label class="inline-check"><input type="checkbox" id="chkFileNameAddId" /> 上家商品ID添加到图片文件名里</label>
+          </div>
+        </fieldset>
+        <div class="btn-row footbar">
+          <span class="flex-spacer"></span>
+          <button class="btn primary" onclick="saveUploadConfig()">保存配置</button>
+        </div>
+      </section>
+
+      <!-- Tab4: 上传宝贝 -->
+      <section class="tabpage" id="tab-upload">
+        <div class="toolbar-row">
+          <button class="btn" onclick="loginShopBtnClick()">登录店铺账号</button>
+          <button class="btn" onclick="openShopWorkbench()">登录1688</button>
+          <span class="tb-label" id="lblShopName">店铺: 未登录</span>
+          <span class="flex-spacer"></span>
+          <button class="btn go big" id="btn_StartUpload" onclick="startUploadQuick()">上传到店铺</button>
+          <span class="tb-label">待上传宝贝数: <b id="lab_leftItem">0</b></span>
+        </div>
+        <div class="toolbar-row">
+          <label class="inline-check"><input type="checkbox" id="chkAutoVerify" checked /> 自动过验证码</label>
+          <label class="inline-check"><input type="checkbox" id="chkFailSaveDraft" checked /> 失败时保存到草稿箱</label>
+          <label class="inline-check"><input type="checkbox" id="chkClearDraft" /> 清空草稿箱</label>
+          <label class="inline-check"><input type="checkbox" id="chkSkipItem" checked /> 跳过已上传的</label>
+          <label class="inline-check"><input type="checkbox" id="chkFission" /> 裂变宝贝</label>
+          <label class="inline-check"><input type="checkbox" id="chk2to1" /> 二合一上传</label>
+          <label>上传宝贝间隔 <input type="number" id="txtIntervalSec" value="30" class="w-s1" /> 秒</label>
+          <label>上传图片间隔 <input type="number" id="txtIntervalPic" value="0" class="w-s1" /> 秒</label>
+          <label>今日限制上传数量 <input type="number" id="txtTodayLimit" value="0" class="w-s2" /></label>
+        </div>
+        <div class="toolbar-row">
+          <button class="btn small" onclick="removeUploadedGoods('ok', this)">移除成功的宝贝</button>
+          <button class="btn small" onclick="removeUploadedGoods('failed', this)">移除失败的宝贝</button>
+          <button class="btn small" onclick="removeSelectedGoods()">移除选中的宝贝</button>
+          <button class="btn small" onclick="exportLink(1)">导出上传成功链接</button>
+          <button class="btn small" onclick="exportLink(2)">导出未上传链接</button>
+          <button class="btn small" onclick="exportLink(3)">导出失败链接</button>
+          <button class="btn small" onclick="downloadItemImgs(this)">下载宝贝图片</button>
+          <button class="btn small" onclick="importLinksTxt()">导入链接.txt</button>
+          <button class="btn small" onclick="mButton3Click(this)">清空上传列表</button>
+          <span class="tb-group-sep"></span>
+          <button class="btn small primary" id="btn-dup-check" onclick="doDupCheck(this)">查重（1688铺货）</button>
+          <button class="btn small" onclick="removeDupGoods(this)">移除重复</button>
+          <button class="btn small" onclick="dupResetMarks(this)">清除重复标记</button>
+          <span id="dup-summary" class="tip-line"></span>
+        </div>
+        <div class="split-2col tall">
+          <div class="panel goods-panel">
+            <div class="panel-head">
+              <h3>上传列表</h3>
+              <span class="spacer"></span>
+              <button class="btn small" onclick="loadUploadList()">刷新</button>
+              <button class="btn small primary" onclick="startUploadSelected()">上传选中</button>
+            </div>
+            <div id="upload-list" class="upload-table"></div>
+          </div>
+          <div class="panel log-panel">
+            <div class="panel-head"><h3>上传日志</h3><span class="spacer"></span><button class="btn small" onclick="clearLogBox('upload-log-box')">清空</button></div>
+            <div id="upload-log-box" class="log-box"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab5: 上传记录 -->
+      <section class="tabpage" id="tab-records">
+        <div class="toolbar-row">
+          <label>源商品ID <input type="text" id="rec-src-id" class="w-s6" /></label>
+          <label>新商品ID <input type="text" id="rec-new-id" class="w-s6" /></label>
+          <button class="btn primary" onclick="loadRecords()">开始查询</button>
+          <button class="btn" onclick="itemShelfOpt('shelf')">上架</button>
+          <button class="btn" onclick="itemShelfOpt('saleout')">下架</button>
+          <button class="btn" onclick="itemShelfOpt('delete')">删除</button>
+          <span class="flex-spacer"></span>
+          <button class="btn" onclick="bridge.openUserData()">打开本地上传记录文件夹</button>
+        </div>
+        <div class="panel">
+          <div id="records-table" class="records-grid"></div>
+        </div>
+      </section>
+
+      <!-- Tab6: AI整店运营 -->
+      <section class="tabpage" id="tab-aiop">
+        <fieldset class="groupbox">
+          <legend>AI 配置（多服务商兼容，Key 只保存在本机）</legend>
+          <div class="toolbar-row">
+            <label class="tb-label-sm">服务商</label>
+            <select id="ai-provider" class="w-s4" onchange="aiProviderChanged()"></select>
+            <label class="tb-label-sm">接口地址</label>
+            <input type="text" id="ai-base" class="w-s9 mono" placeholder="https://api.deepseek.com/v1" />
+            <label class="tb-label-sm">API Key</label>
+            <input type="password" id="ai-key" class="w-s7" placeholder="sk-…" />
+            <button class="btn small" onclick="aiToggleKey(this)">显示</button>
+          </div>
+          <div class="toolbar-row">
+            <label class="tb-label-sm">模型</label>
+            <input type="text" id="ai-model" class="w-s6 mono" placeholder="deepseek-chat" />
+            <div class="tb-group">
+              <button class="btn" onclick="aiTestConn(this)">测试连接</button>
+              <button class="btn primary" onclick="aiSaveConfig(this)">保存配置</button>
+            </div>
+            <span id="ai-cfg-msg" class="tip-line"></span>
+          </div>
+        </fieldset>
+
+        <fieldset class="groupbox" style="border-color:#f0a44a;background:#fffbf5">
+          <legend style="color:#c05621">AI 全店托管（开启后自动巡检店铺：诊断问题商品→自动下架→定价建议→日报）</legend>
+          <div class="toolbar-row">
+            <label class="inline-check"><input type="checkbox" id="host-enabled" onchange="hostSaveFromUi()" /> 开启托管</label>
+            <label class="inline-check"><input type="checkbox" id="host-autoshelf" onchange="hostSaveFromUi()" checked /> 自动下架问题商品</label>
+            <label class="inline-check"><input type="checkbox" id="host-pricing" onchange="hostSaveFromUi()" checked /> 自动定价建议</label>
+            <label class="tb-label-sm">每日巡检</label>
+            <input type="time" id="host-time" value="02:00" onchange="hostSaveFromUi()" class="w-s3" />
+            <span class="tb-label-sm">诊断模式</span>
+            <select id="host-mode" class="w-s5" onchange="hostSaveFromUi()">
+              <option value="auto">自动（有Key用AI，无Key规则）</option>
+              <option value="demo">规则演示</option>
+            </select>
+            <div class="tb-group">
+              <button class="btn primary" id="btn-host-run" onclick="doHostRun(this)">立即执行托管</button>
+              <button class="btn" onclick="loadHostRecords()">托管日志</button>
+            </div>
+            <span id="host-status" class="tip-line"></span>
+          </div>
+          <div class="toolbar-row">
+            <span id="host-summary" class="tip-line"></span>
+            <span class="flex-spacer"></span>
+            <span class="tip-line">托管动作有风控间隔（1.2s/个）与每日上限（50），日志可在「上传记录」页查看</span>
+          </div>
+        </fieldset>
+
+        <div class="toolbar-row">
+          <span class="tb-label">运营范围</span>
+          <select id="ai-scope" class="w-s5">
+            <option value="all" selected>本地商品 + 店铺在售</option>
+            <option value="local">仅本地商品库</option>
+          </select>
+          <span class="tb-label">分析模式</span>
+          <select id="ai-mode" class="w-s5">
+            <option value="auto" selected>自动（有Key用AI，无Key演示）</option>
+            <option value="ai">强制AI模式</option>
+            <option value="demo">演示模式（本地规则）</option>
+          </select>
+          <div class="tb-group">
+            <button class="btn primary" id="btn-ai-operate" onclick="doAiOperate(this)">开始整店运营</button>
+            <button class="btn" onclick="aiApplyTitles(this)">应用优化标题</button>
+            <button class="btn" onclick="aiExportReport(this)">导出报告.txt</button>
+            <button class="btn" onclick="aiResetReport()">清空结果</button>
+          </div>
+          <span id="ai-summary" class="tip-line"></span>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>运营诊断报告</h3><span class="spacer"></span><span id="ai-err" class="tip-line" style="color:var(--err)"></span></div>
+          <div id="ai-report" class="ai-report"><div class="ai-empty">点击「开始整店运营」：拉取本店商品 → AI 诊断标题/违禁词/卖点/价格 → 生成优化报告<br/>没有 AI Key 也能用「演示模式」跑通全流程（本地规则）</div></div>
+        </div>
+      </section>
+
+      <!-- Tab: 供应商管理 -->
+      <section class="tabpage" id="tab-suppl">
+        <div class="panel">
+          <div class="panel-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <h3>供应商管理</h3>
+            <span style="color:var(--sub);font-size:11px">向供应商私信要退货地址后，先到千牛后台「退货地址管理」添加，再在此填写同名地址（发布时自动匹配）；失联供应商可一键下架其所有淘宝商品</span>
+            <span style="flex:1"></span>
+            <button class="btn" onclick="syncSuppliersFromGoods()">从采集库同步供应商</button>
+          </div>
+          <div id="suppl-list" class="suppl-list">
+            <div class="empty-hint">点击「从采集库同步供应商」自动把已采集过的供应商导入列表</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- 日志页 -->
+    <section class="page" id="page-logs">
+      <div class="panel"><div class="panel-head"><h3>系统日志</h3></div><div id="logs-box" class="log-box" style="max-height:70vh"></div></div>
+    </section>
+  </div>
+  <div id="progress-stack"></div>
+  <!-- 无弹窗交互：底部内嵌工具条（输入/选择/二次确认均在此完成） -->
+  <div id="inline-toolbar" style="display:none">
+    <div class="it-box">
+      <div class="it-title" id="it-title"></div>
+      <div class="it-fields" id="it-fields"></div>
+      <div class="it-btns">
+        <button class="btn primary" id="it-ok">确定</button>
+        <button class="btn" id="it-cancel">取消</button>
+      </div>
+    </div>
+  </div>
+  <!-- 首启免责声明遮罩（同意一次后不再显示） -->
+  <div id="disclaimer-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(30,44,58,.75)">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:620px;max-width:92vw;max-height:86vh;overflow:auto;background:#fff;border-radius:2px;padding:28px 32px;box-shadow:0 16px 48px rgba(0,0,0,.25);font-size:13px;line-height:1.8;color:#1a1a1a">
+      <h2 style="margin:0 0 4px;font-size:20px">使用须知与免责声明</h2>
+      <p id="disclaimer-ver" style="margin:0 0 14px;color:#64748b;font-size:12px"></p>
+      <div style="background:#fff7ed;border-left:3px solid #ff8c1a;border-radius:2px;padding:12px 16px;margin-bottom:12px">
+        <b>风险告知（请务必阅读）</b>
+        <ul style="margin:6px 0 0;padding-left:22px">
+          <li>本工具用于 <b>1688 商品搬运上架</b>。2026 年起淘宝/1688 对"无货源店铺"管控严格，批量铺货可能面临商品下架、扣分、限流甚至封店，<b>风险由使用者自行承担</b>。</li>
+          <li>优先采集 <b>一件代发/分销</b> 货源并保留上家授权（1688 商品通常已授权分销转载），上架后建议人工抽查。</li>
+          <li>请控制上传节奏（默认每日限量 30、随机间隔 45~180 秒），不要调太猛。</li>
+          <li>账号登录态保存在<b>本机</b>（C 盘用户数据目录），不上传任何服务器；请勿把数据目录分享给他人。</li>
+        </ul>
+      </div>
+      <p style="margin:0 0 14px;color:#64748b;font-size:12px">点击「我已阅读并同意」即表示你已理解上述风险并自愿使用本软件。软件仅供个人学习与自有店铺运营使用，请遵守 1688/淘宝平台规则及当地法律法规。</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" id="disclaimer-exit" style="padding:7px 20px">退出软件</button>
+        <button class="btn primary" id="disclaimer-agree" style="padding:7px 20px">我已阅读并同意</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

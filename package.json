@@ -1,0 +1,46 @@
+{
+  "name": "qn-publisher",
+  "productName": "千牛铺货助手",
+  "version": "1.1.2",
+  "description": "1688商品采集 → 千牛自动上架桌面工具",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "author": "self-use",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.selfuse.qnpublisher",
+    "productName": "千牛铺货助手",
+    "files": [
+      "main.js",
+      "preload.js",
+      "core/**/*",
+      "renderer/**/*",
+      "!**/.temp/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.3",
+    "ws": "^8.21.3"
+  }
+}
