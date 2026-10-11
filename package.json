@@ -10,7 +10,7 @@
     "dist": "electron-builder"
   },
   "author": "self-use",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "devDependencies": {
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
